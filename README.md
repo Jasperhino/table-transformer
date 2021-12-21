@@ -53,6 +53,14 @@ conda env create -f environment.yml
 conda activate tables-detr
 ```
 
+## Login into Weights and Biases
+Install and log into Weights and Biases:
+
+```
+conda install -c conda-forge wandb
+wandb login
+```
+
 ## Model Training
 The code trains models for 2 different sets of table extraction tasks:
 

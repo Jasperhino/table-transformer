@@ -8,6 +8,7 @@ import sys
 import random
 import numpy as np
 import torch
+import wandb
 from torch.utils.data import DataLoader
 
 sys.path.append("../detr")
@@ -138,18 +139,23 @@ def get_data(args):
     class_map = get_class_map(args.data_type)
 
     if args.mode == "train":
+        num_train_samples, num_val_samples = 4000, 1000
+
         dataset_train = PDFTablesDataset(
             os.path.join(args.data_root_dir, "train"),
             get_transform(args.data_type, "train"),
             do_crop=False,
+            max_size=num_train_samples,
             max_neg=0,
             make_coco=False,
             image_extension=".jpg",
             xml_fileset="train_filelist.txt",
             class_map=class_map)
+
         dataset_val = PDFTablesDataset(os.path.join(args.data_root_dir, "val"),
                                        get_transform(args.data_type, "val"),
                                        do_crop=False,
+                                       max_size=num_val_samples,
                                        make_coco=True,
                                        image_extension=".jpg",
                                        xml_fileset="val_filelist.txt",
@@ -163,6 +169,7 @@ def get_data(args):
                                                             drop_last=True)
 
         data_loader_train = DataLoader(dataset_train,
+                                       pin_memory=True,
                                        batch_sampler=batch_sampler_train,
                                        collate_fn=utils.collate_fn,
                                        num_workers=args.num_workers)
@@ -172,8 +179,7 @@ def get_data(args):
                                      drop_last=False,
                                      collate_fn=utils.collate_fn,
                                      num_workers=args.num_workers)
-        return data_loader_train, data_loader_val, dataset_val, len(
-            dataset_train)
+        return data_loader_train, data_loader_val, dataset_val, len(dataset_train)
 
     elif args.mode == "eval":
 
@@ -213,6 +219,11 @@ def get_model(args, device):
     If a load path is specified, the state dict is updated accordingly.
     """
     model, criterion, postprocessors = build_model(args)
+
+    # if torch.cuda.device_count() > 1:
+    #    print("Let's use", torch.cuda.device_count(), "GPUs!")
+    #    model = torch.nn.DataParallel(model)
+
     model.to(device)
     if args.model_load_path:
         print("loading model from checkpoint")
@@ -255,6 +266,11 @@ def train(args, model, criterion, postprocessors, device):
 
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
+
+    # Setting up wandb
+    config =vars(args())
+    wandb.init(project="pubtab1m", entity="ai-in-practice", config=config)
+    wandb.watch(model, criterion, log="all")
 
     print("loading data")
     dataloading_time = datetime.now()
